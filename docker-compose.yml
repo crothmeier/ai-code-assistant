@@ -1,0 +1,29 @@
+version: "3.9"
+services:
+  orchestrator:
+    build: ./orchestrator
+    ports: [ "8000:8000" ]
+    environment:
+      VECTOR_DB_URL: http://vector-db:6333
+      MODEL_ENDPOINTS: |
+        [
+          {"name": "mistral-7b", "url": "http://model-worker:8080"}
+        ]
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./shared:/workspace/shared
+    restart: unless-stopped
+
+  model-worker:
+    build: ./model-worker
+    runtime: nvidia
+    shm_size: "1g"
+    environment:
+      MODEL_NAME: mistral-7b
+    restart: unless-stopped
+
+  vector-db:
+    image: qdrant/qdrant:latest
+    volumes:
+      - ./vector-data:/qdrant/storage
+    restart: unless-stopped

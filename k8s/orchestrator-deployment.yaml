@@ -1,0 +1,26 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: assistant-orchestrator
+spec:
+  selector:
+    matchLabels:
+      app: orchestrator
+  template:
+    metadata:
+      labels:
+        app: orchestrator
+    spec:
+      containers:
+      - name: orchestrator
+        image: ghcr.io/lazarus-labs/orchestrator:latest
+        ports:
+        - containerPort: 8000
+        env:
+        - name: VECTOR_DB_URL
+          value: http://vector-db.default.svc.cluster.local:6333
+        - name: MODEL_ENDPOINTS
+          value: |
+            [
+              {"name":"mistral-7b","url":"http://model-worker.default.svc.cluster.local:8080"}
+            ]
