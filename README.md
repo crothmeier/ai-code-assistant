@@ -1,25 +1,15 @@
-# Self‑Hosted AI Code Assistant
+# Lazarus-Labs AI Code Assistant
 
-A modular, distributed Claude‑Code‑style coding copilot for homelab GPU clusters.
-This repository contains all the artifacts needed to run the assistant in **monolith**
-mode on a single host *or* in **mesh** mode across a 10 GbE backbone.
+[![CI](https://img.shields.io/github/actions/workflow/status/Lazarus-Labs/ai-code-assistant/ci.yml?branch=main)]()
+[![License](https://img.shields.io/github/license/Lazarus-Labs/ai-code-assistant)]()
 
-> **Hardware reference** – HP DL380p Gen8 (T4), Dell T5610 (A4000), ThinkPad T16 (A2000 eGPU), HPE DL360 Gen10 (L4).
-
-## Quick start (single‑node)
+## Quick Start (Kubernetes)
 
 ```bash
-git clone https://github.com/lazarus‑labs/ai‑code‑assistant.git
-cd ai‑code‑assistant
-docker compose up -d
-./cli/assistant ask "Generate a Python Fibonacci function"
+helm repo add lazarus-labs https://lazarus-labs.github.io/helm-charts
+helm repo update
+helm install ai-assistant lazarus-labs/ai-code-assistant \
+  --set modelWorker.resources.limits.nvidia\.com/gpu=1
+kubectl port-forward svc/ai-assistant-orchestrator 8000:8000
+curl -X POST http://localhost:8000/api/code/complete -d '{"prompt":"FizzBuzz in Go"}'
 ```
-
-## Production (mesh) deploy
-
-* Deploy a k3s cluster (or K8s) on all nodes.
-* Apply manifests in [`k8s/`](k8s/) – use node selectors so GPU pods land on GPU hosts.
-* Mount the NFS share exported by the DL380p on **/mnt/ai‑share** of every node.
-* Point the CLI to the orchestrator service DNS name (default `assistant-orchestrator.svc.cluster.local`).
-
-See **docs/** for full architecture, security model, and tuning guides.
