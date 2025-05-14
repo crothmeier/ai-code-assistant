@@ -1,1 +1,1 @@
-"""Marks orchestrator as a Python package so tests can import it."""
+"""Marks orchestrator as a Python package for test discovery."""

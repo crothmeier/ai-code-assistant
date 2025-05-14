@@ -4,9 +4,10 @@ version = "0.1.1"
 description = "FastAPI-based AI code assistant with GPU-aware routing"
 authors = ["crothmeier <you@example.com>"]
 readme = "README.md"
+packages = [{include = "src"}, {include = "orchestrator"}]
 
 [tool.poetry.dependencies]
-python = ">=3.11,<3.12"
+python = ">=3.11,<3.14"
 fastapi = "^0.110.0"
 uvicorn = "^0.27.0"
 

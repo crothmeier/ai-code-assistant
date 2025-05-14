@@ -37,3 +37,12 @@ logs/
 *.log
 
 **/.claude/settings.local.json
+
+# MkDocs build directory
+site/
+
+# Node.js
+node_modules/
+
+# Patch files
+*.patch
