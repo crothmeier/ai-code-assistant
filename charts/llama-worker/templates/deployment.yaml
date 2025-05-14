@@ -1,7 +1,3 @@
-{{- define "app.container.name" -}}
-{{ .Chart.Name }}-{{ .Values.name | default "app" }}-{{ .Release.Name }}
-{{- end -}}
-
 containers:
 - name: {{ include "app.container.name" . }}
   image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
