@@ -1,0 +1,1013 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+        exclude: charts/
+      - id: check-added-large-files
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.3.3
+    hooks:
+      - id: ruff
+        args: [--fix]
+        additional_dependencies: ["ruff[lint]==0.3.3"]
+  - repo: local
+    hooks:
+      - id: mypy
+        name: mypy
+        entry: mypy src orchestrator tests
+        language: system
+        types: [python]
+        args: ["--strict"]
+        require_serial: true
+        pass_filenames: false
+      - id: pytest
+        name: pytest
+        entry: python -m pytest
+        language: system
+        types: [python]
+        args: ["-q"]
+        pass_filenames: false
+        stages: [manual, pre-push]FROM python:3.11-slim AS builder
+# Install poetry
+RUN pip install --no-cache-dir poetry==1.7.1
+# Set up work directory
+WORKDIR /app
+# Copy only poetry files for dependencies installation
+COPY pyproject.toml poetry.lock* ./
+# Configure poetry to not create a virtual environment
+RUN poetry config virtualenvs.create false
+# Install dependencies only (without dev dependencies)
+RUN poetry install --no-dev --no-interaction --no-ansi
+# Second stage for a smaller image
+FROM python:3.11-slim
+# Set environment variables
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/app
+# Create user to avoid running as root
+RUN addgroup --system app && adduser --system --group app
+# Set up the working directory
+WORKDIR /app
+# Copy dependencies from builder stage
+COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
+COPY --from=builder /usr/local/bin /usr/local/bin
+# Copy the application code
+COPY . .
+# Set ownership of the application files
+RUN chown -R app:app /app
+# Switch to non-root user
+USER app
+# Run the application
+EXPOSE 8000
+CMD ["uvicorn", "orchestrator.app:app", "--host", "0.0.0.0", "--port", "8000"]# GitHub Actions CI/CD Secrets Configuration
+This document outlines the repository secrets needed for the CI/CD workflow to successfully build, scan, and push the Docker image to GitHub Container Registry (GHCR).
+## Required Repository Secrets
+For most operations, the workflow uses the automatic `GITHUB_TOKEN` which is provided by GitHub Actions. This token has the necessary permissions for:
+- Package publishing to GitHub Container Registry (ghcr.io)
+- Posting security scan results to GitHub Security tab
+## Setting Up Repository Access
+To ensure the workflow can push to the GitHub Container Registry, you need to:
+1. **Enable improved container support** in your repository:
+   - Go to your repository settings
+   - Navigate to "Packages"
+   - Ensure "Inherit access from source repository" is enabled
+2. **Configure repository permissions**:
+   - Go to your repository settings
+   - Navigate to "Actions" → "General"
+   - Under "Workflow permissions", select "Read and write permissions"
+   - Check "Allow GitHub Actions to create and approve pull requests"
+## Troubleshooting
+If you encounter issues with pushing to GHCR, you may need to manually create a Personal Access Token (PAT) with appropriate permissions:
+1. Create a new PAT at GitHub → Settings → Developer settings → Personal access tokens
+2. Grant it the following permissions:
+   - `read:packages`
+   - `write:packages`
+   - `delete:packages`
+   - `repo` (for private repositories)
+3. Add the token as a repository secret:
+   - Repository → Settings → Secrets and variables → Actions
+   - Add new repository secret named `CR_PAT`
+4. Update the workflow to use this token by replacing:
+   ```yaml
+   password: ${{ secrets.GITHUB_TOKEN }}
+   ```
+   with:
+   ```yaml
+   password: ${{ secrets.CR_PAT }}
+   ```
+## Security Notes
+- The Trivy scanner is configured to check for HIGH and CRITICAL vulnerabilities
+- Scan results are automatically uploaded to the GitHub Security tab
+- Images are only pushed to GHCR on commits to the main branch# GitHub Pages Setup Instructions
+This document provides instructions for setting up GitHub Pages to publish the MkDocs documentation for the AI Code Assistant project.
+## Automatic Setup with CI Workflow
+The project is configured to automatically build and deploy documentation to GitHub Pages on every push to the main branch. The CI workflow handles the building and publishing process.
+## Manual Configuration Steps
+Before the automatic deployment works correctly, you need to configure a few repository settings:
+### 1. Enable GitHub Pages
+1. Go to your repository on GitHub.
+2. Click **Settings** in the top navigation bar.
+3. In the left sidebar, click **Pages**.
+4. Under **Build and deployment**:
+   - For **Source**, select **Deploy from a branch**.
+   - For **Branch**, select **gh-pages** (this will be created by the CI workflow) and **/ (root)**.
+5. Click **Save**.
+![GitHub Pages Settings](https://docs.github.com/assets/cb-97800/mw-1440/images/help/pages/publishing-source-drop-down.webp)
+### 2. Configure Repository Permissions
+The GitHub Actions workflow needs permission to write to the gh-pages branch:
+1. In your repository, go to **Settings** → **Actions** → **General**.
+2. Scroll down to **Workflow permissions**.
+3. Select **Read and write permissions**.
+4. Click **Save**.
+![Workflow Permissions](https://docs.github.com/assets/cb-309762/mw-1440/images/help/actions/workflow-permissions-repository.webp)
+## Troubleshooting
+If the automatic deployment isn't working:
+1. **Check workflow runs**: Go to the Actions tab in your repository to see if the workflow is running and check for any errors.
+2. **Verify permissions**: Ensure that the GitHub Pages source is set to the gh-pages branch and that workflow permissions allow write access.
+3. **Manual deployment**: You can manually deploy the docs with:
+   ```bash
+   poetry run mkdocs gh-deploy
+   ```
+4. **Force push to gh-pages**: If needed, you can manually create and push to the gh-pages branch:
+   ```bash
+   git checkout --orphan gh-pages
+   git rm -rf .
+   poetry run mkdocs build
+   cp -r site/* .
+   rm -rf site
+   git add .
+   git commit -m "Manual docs deployment"
+   git push -f origin gh-pages
+   git checkout main
+   ```
+## Custom Domain (Optional)
+If you want to use a custom domain for your documentation:
+1. Go to **Settings** → **Pages**.
+2. Under **Custom domain**, enter your domain name.
+3. Click **Save**.
+4. Add a CNAME file to the docs directory:
+   ```bash
+   echo "your-custom-domain.com" > docs/CNAME
+   ```
+5. Commit and push the CNAME file.
+## Accessing Your Documentation
+Once deployed, your documentation will be available at:
+`https://[username].github.io/ai-code-assistant/`
+Or at your custom domain if configured.# AI Code Assistant
+A FastAPI-based AI code assistant with GPU-aware routing for efficient resource allocation.
+## Overview
+The AI Code Assistant is a platform for deploying and managing AI coding assistants with intelligent GPU selection and resource allocation. It uses a weighted routing system to direct requests to the most appropriate GPU based on model requirements and resource availability.
+Key features:
+- **GPU-aware routing**: Automatically selects the optimal GPU for each request
+- **Weighted load balancing**: Distributes workload based on GPU capability
+- **Kubernetes integration**: Seamlessly runs in Kubernetes environments
+- **Monitoring**: Prometheus metrics for performance tracking
+- **Security**: Robust security controls and container hardening
+## Quick Start
+### Prerequisites
+- Python 3.11+
+- Poetry for dependency management
+- Docker and Docker Compose for containerization (optional)
+- Kubernetes for production deployment (optional)
+### Local Development Setup
+1. **Clone the repository**:
+   ```bash
+   git clone https://github.com/crothmeier/ai-code-assistant.git
+   cd ai-code-assistant
+   ```
+2. **Install dependencies**:
+   ```bash
+   poetry install
+   ```
+3. **Run the tests**:
+   ```bash
+   poetry run pytest
+   ```
+4. **Start the development server**:
+   ```bash
+   poetry run uvicorn orchestrator.app:app --reload
+   ```
+5. **Access the API**:
+   - API will be available at http://localhost:8000
+   - Documentation at http://localhost:8000/docs
+### Using Docker
+```bash
+# Build and start the services
+docker-compose up -d
+# View logs
+docker-compose logs -f
+# Stop the services
+docker-compose down
+```
+### Kubernetes Deployment
+```bash
+# Apply the network policy for DNS
+kubectl apply -f k8s/netpol-allow-dns.yaml
+# Deploy the orchestrator
+kubectl apply -f k8s/orchestrator-deployment.yaml
+# Check deployment status
+kubectl get pods -l app=orchestrator
+```
+## Project Structure
+```
+ai-code-assistant/
+├── charts/                  # Helm charts
+├── docs/                    # Documentation
+├── k8s/                     # Kubernetes manifests
+├── model-worker/            # Model worker implementation
+├── orchestrator/            # Main orchestration service
+├── sandbox-executor/        # Sandbox execution environment
+├── src/                     # Core source code
+│   └── router/              # Routing logic
+└── tests/                   # Unit and integration tests
+```
+## Next Steps
+- Check out the [Router Design](router.md) documentation
+- Review the [Security](security.md) practices
+- Explore the [Architecture](architecture.md) overview# Weighted Router Design
+The Weighted Router is a core component of the AI Code Assistant that intelligently distributes requests to the most appropriate GPU resources based on capabilities, load, and model requirements.
+## Architecture Overview
+The router implements a weighted load balancing algorithm that considers:
+- GPU memory capacity
+- Current GPU utilization
+- Specific GPU hardware capabilities
+- GPU-model compatibility
+- Historical performance metrics
+```mermaid
+graph TD
+    Client[Client Request] --> Orchestrator
+    Orchestrator --> Router[Weighted Router]
+    Router --> Metrics[Prometheus Metrics]
+    Router --> GPU1[GPU Worker 1]
+    Router --> GPU2[GPU Worker 2]
+    Router --> GPU3[GPU Worker 3]
+    Metrics --> Router
+```
+## Key Components
+### ModelEndpoint
+`ModelEndpoint` represents a destination for routing requests. Each endpoint has:
+```python
+@dataclass
+class ModelEndpoint:
+    """Represents a model endpoint for routing."""
+    name: str
+    url: str
+```
+### GPUInfo
+`GPUInfo` encapsulates GPU-specific information that's used for making routing decisions:
+```python
+class GPUInfo:
+    """GPU information provided by external systems."""
+    id: str
+    name: Optional[str]
+    total_memory_mib: float
+```
+### WorkerConfig
+`WorkerConfig` defines configuration parameters for worker instances, with customizations based on GPU type:
+```python
+class WorkerConfig(TypedDict, total=False):
+    """Configuration for worker instances."""
+    gpu_id: str
+    block_size: int
+    gpu_memory_utilization: float
+```
+## Routing Algorithm
+The router uses a multi-stage decision process:
+1. **GPU Selection**: Filter available GPUs based on hardware compatibility
+2. **Metric Calculation**: Calculate capacity and utilization metrics for each GPU
+3. **Configuration Optimization**: Create optimized worker configurations for each GPU type
+4. **Endpoint Selection**: Select the best endpoint based on the combined metrics
+### GPU Selection Logic
+The router can prefer specific GPU types through the `preferred_gpu_type` parameter:
+```python
+def select_gpu(self, gpu_info: GPUInfo) -> bool:
+    if self.preferred_gpu_type and gpu_info.name:
+        return self.preferred_gpu_type.lower() in gpu_info.name.lower()
+    return True
+```
+### Hardware-Specific Optimizations
+The router applies specialized configurations for different GPU types. For example, NVIDIA T4 GPUs receive custom settings to minimize memory fragmentation:
+```python
+def build_worker_config(self, gpu_info: GPUInfo) -> WorkerConfig:
+    config: WorkerConfig = {"gpu_id": gpu_info.id}
+    # Tune settings for NVIDIA T4 GPUs to curb PagedAttention fragmentation
+    if gpu_info.name and "t4" in gpu_info.name.lower():
+        config["block_size"] = 8
+        config["gpu_memory_utilization"] = 0.85
+    return config
+```
+## Metrics and Caching
+The router uses Prometheus metrics to track GPU performance and availability. It maintains a cache of GPU metrics to reduce the overhead of frequent metric queries:
+```python
+self.cache: Dict[str, float] = {}
+```
+In production, the cached metrics are regularly updated from Prometheus and used in the endpoint selection algorithm.
+## Endpoint Selection
+The router asynchronously selects the best endpoint based on the calculated metrics:
+```python
+async def get_best_endpoint(self) -> Optional[ModelEndpoint]:
+    """Returns the best endpoint based on weights."""
+    # In a real implementation, this would use the cache and weights
+    # For now, we just return the first endpoint if available
+    return self.endpoints[0] if self.endpoints else None
+```
+## Future Enhancements
+Planned enhancements to the router include:
+1. **Dynamic Weight Adjustment**: Automatically adjust weights based on request latency and error rates
+2. **GPU Memory Management**: Intelligent allocation of GPU memory based on model size requirements
+3. **Batching Support**: Grouping similar requests to optimize throughput
+4. **Advanced Failover**: Sophisticated failover mechanisms with health checks
+5. **Multi-datacenter Support**: Routing across multiple regions for global deploymentsrepos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+        exclude: charts/
+      - id: check-added-large-files
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.3.3
+    hooks:
+      - id: ruff
+        args: [--fix]
+        additional_dependencies: ["ruff[lint]==0.3.3"]
+  - repo: local
+    hooks:
+      - id: mypy
+        name: mypy
+        entry: mypy src orchestrator tests
+        language: system
+        types: [python]
+        args: ["--strict"]
+        require_serial: true
+        pass_filenames: false
+      - id: pytest
+        name: pytest
+        entry: python -m pytest
+        language: system
+        types: [python]
+        args: ["-q"]
+        pass_filenames: false
+        stages: [manual, pre-push]FROM python:3.11-slim AS builder
+# Install poetry
+RUN pip install --no-cache-dir poetry==1.7.1
+# Set up work directory
+WORKDIR /app
+# Copy only poetry files for dependencies installation
+COPY pyproject.toml poetry.lock* ./
+# Configure poetry to not create a virtual environment
+RUN poetry config virtualenvs.create false
+# Install dependencies only (without dev dependencies)
+RUN poetry install --no-dev --no-interaction --no-ansi
+# Second stage for a smaller image
+FROM python:3.11-slim
+# Set environment variables
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/app
+# Create user to avoid running as root
+RUN addgroup --system app && adduser --system --group app
+# Set up the working directory
+WORKDIR /app
+# Copy dependencies from builder stage
+COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
+COPY --from=builder /usr/local/bin /usr/local/bin
+# Copy the application code
+COPY . .
+# Set ownership of the application files
+RUN chown -R app:app /app
+# Switch to non-root user
+USER app
+# Run the application
+EXPOSE 8000
+CMD ["uvicorn", "orchestrator.app:app", "--host", "0.0.0.0", "--port", "8000"]# GitHub Actions CI/CD Secrets Configuration
+This document outlines the repository secrets needed for the CI/CD workflow to successfully build, scan, and push the Docker image to GitHub Container Registry (GHCR).
+## Required Repository Secrets
+For most operations, the workflow uses the automatic `GITHUB_TOKEN` which is provided by GitHub Actions. This token has the necessary permissions for:
+- Package publishing to GitHub Container Registry (ghcr.io)
+- Posting security scan results to GitHub Security tab
+## Setting Up Repository Access
+To ensure the workflow can push to the GitHub Container Registry, you need to:
+1. **Enable improved container support** in your repository:
+   - Go to your repository settings
+   - Navigate to "Packages"
+   - Ensure "Inherit access from source repository" is enabled
+2. **Configure repository permissions**:
+   - Go to your repository settings
+   - Navigate to "Actions" → "General"
+   - Under "Workflow permissions", select "Read and write permissions"
+   - Check "Allow GitHub Actions to create and approve pull requests"
+## Troubleshooting
+If you encounter issues with pushing to GHCR, you may need to manually create a Personal Access Token (PAT) with appropriate permissions:
+1. Create a new PAT at GitHub → Settings → Developer settings → Personal access tokens
+2. Grant it the following permissions:
+   - `read:packages`
+   - `write:packages`
+   - `delete:packages`
+   - `repo` (for private repositories)
+3. Add the token as a repository secret:
+   - Repository → Settings → Secrets and variables → Actions
+   - Add new repository secret named `CR_PAT`
+4. Update the workflow to use this token by replacing:
+   ```yaml
+   password: ${{ secrets.GITHUB_TOKEN }}
+   ```
+   with:
+   ```yaml
+   password: ${{ secrets.CR_PAT }}
+   ```
+## Security Notes
+- The Trivy scanner is configured to check for HIGH and CRITICAL vulnerabilities
+- Scan results are automatically uploaded to the GitHub Security tab
+- Images are only pushed to GHCR on commits to the main branch# GitHub Pages Setup Instructions
+This document provides instructions for setting up GitHub Pages to publish the MkDocs documentation for the AI Code Assistant project.
+## Automatic Setup with CI Workflow
+The project is configured to automatically build and deploy documentation to GitHub Pages on every push to the main branch. The CI workflow handles the building and publishing process.
+## Manual Configuration Steps
+Before the automatic deployment works correctly, you need to configure a few repository settings:
+### 1. Enable GitHub Pages
+1. Go to your repository on GitHub.
+2. Click **Settings** in the top navigation bar.
+3. In the left sidebar, click **Pages**.
+4. Under **Build and deployment**:
+   - For **Source**, select **Deploy from a branch**.
+   - For **Branch**, select **gh-pages** (this will be created by the CI workflow) and **/ (root)**.
+5. Click **Save**.
+![GitHub Pages Settings](https://docs.github.com/assets/cb-97800/mw-1440/images/help/pages/publishing-source-drop-down.webp)
+### 2. Configure Repository Permissions
+The GitHub Actions workflow needs permission to write to the gh-pages branch:
+1. In your repository, go to **Settings** → **Actions** → **General**.
+2. Scroll down to **Workflow permissions**.
+3. Select **Read and write permissions**.
+4. Click **Save**.
+![Workflow Permissions](https://docs.github.com/assets/cb-309762/mw-1440/images/help/actions/workflow-permissions-repository.webp)
+## Troubleshooting
+If the automatic deployment isn't working:
+1. **Check workflow runs**: Go to the Actions tab in your repository to see if the workflow is running and check for any errors.
+2. **Verify permissions**: Ensure that the GitHub Pages source is set to the gh-pages branch and that workflow permissions allow write access.
+3. **Manual deployment**: You can manually deploy the docs with:
+   ```bash
+   poetry run mkdocs gh-deploy
+   ```
+4. **Force push to gh-pages**: If needed, you can manually create and push to the gh-pages branch:
+   ```bash
+   git checkout --orphan gh-pages
+   git rm -rf .
+   poetry run mkdocs build
+   cp -r site/* .
+   rm -rf site
+   git add .
+   git commit -m "Manual docs deployment"
+   git push -f origin gh-pages
+   git checkout main
+   ```
+## Custom Domain (Optional)
+If you want to use a custom domain for your documentation:
+1. Go to **Settings** → **Pages**.
+2. Under **Custom domain**, enter your domain name.
+3. Click **Save**.
+4. Add a CNAME file to the docs directory:
+   ```bash
+   echo "your-custom-domain.com" > docs/CNAME
+   ```
+5. Commit and push the CNAME file.
+## Accessing Your Documentation
+Once deployed, your documentation will be available at:
+`https://[username].github.io/ai-code-assistant/`
+Or at your custom domain if configured.# AI Code Assistant
+A FastAPI-based AI code assistant with GPU-aware routing for efficient resource allocation.
+## Overview
+The AI Code Assistant is a platform for deploying and managing AI coding assistants with intelligent GPU selection and resource allocation. It uses a weighted routing system to direct requests to the most appropriate GPU based on model requirements and resource availability.
+Key features:
+- **GPU-aware routing**: Automatically selects the optimal GPU for each request
+- **Weighted load balancing**: Distributes workload based on GPU capability
+- **Kubernetes integration**: Seamlessly runs in Kubernetes environments
+- **Monitoring**: Prometheus metrics for performance tracking
+- **Security**: Robust security controls and container hardening
+## Quick Start
+### Prerequisites
+- Python 3.11+
+- Poetry for dependency management
+- Docker and Docker Compose for containerization (optional)
+- Kubernetes for production deployment (optional)
+### Local Development Setup
+1. **Clone the repository**:
+   ```bash
+   git clone https://github.com/crothmeier/ai-code-assistant.git
+   cd ai-code-assistant
+   ```
+2. **Install dependencies**:
+   ```bash
+   poetry install
+   ```
+3. **Run the tests**:
+   ```bash
+   poetry run pytest
+   ```
+4. **Start the development server**:
+   ```bash
+   poetry run uvicorn orchestrator.app:app --reload
+   ```
+5. **Access the API**:
+   - API will be available at http://localhost:8000
+   - Documentation at http://localhost:8000/docs
+### Using Docker
+```bash
+# Build and start the services
+docker-compose up -d
+# View logs
+docker-compose logs -f
+# Stop the services
+docker-compose down
+```
+### Kubernetes Deployment
+```bash
+# Apply the network policy for DNS
+kubectl apply -f k8s/netpol-allow-dns.yaml
+# Deploy the orchestrator
+kubectl apply -f k8s/orchestrator-deployment.yaml
+# Check deployment status
+kubectl get pods -l app=orchestrator
+```
+## Project Structure
+```
+ai-code-assistant/
+├── charts/                  # Helm charts
+├── docs/                    # Documentation
+├── k8s/                     # Kubernetes manifests
+├── model-worker/            # Model worker implementation
+├── orchestrator/            # Main orchestration service
+├── sandbox-executor/        # Sandbox execution environment
+├── src/                     # Core source code
+│   └── router/              # Routing logic
+└── tests/                   # Unit and integration tests
+```
+## Next Steps
+- Check out the [Router Design](router.md) documentation
+- Review the [Security](security.md) practices
+- Explore the [Architecture](architecture.md) overview# Weighted Router Design
+The Weighted Router is a core component of the AI Code Assistant that intelligently distributes requests to the most appropriate GPU resources based on capabilities, load, and model requirements.
+## Architecture Overview
+The router implements a weighted load balancing algorithm that considers:
+- GPU memory capacity
+- Current GPU utilization
+- Specific GPU hardware capabilities
+- GPU-model compatibility
+- Historical performance metrics
+```mermaid
+graph TD
+    Client[Client Request] --> Orchestrator
+    Orchestrator --> Router[Weighted Router]
+    Router --> Metrics[Prometheus Metrics]
+    Router --> GPU1[GPU Worker 1]
+    Router --> GPU2[GPU Worker 2]
+    Router --> GPU3[GPU Worker 3]
+    Metrics --> Router
+```
+## Key Components
+### ModelEndpoint
+`ModelEndpoint` represents a destination for routing requests. Each endpoint has:
+```python
+@dataclass
+class ModelEndpoint:
+    """Represents a model endpoint for routing."""
+    name: str
+    url: str
+```
+### GPUInfo
+`GPUInfo` encapsulates GPU-specific information that's used for making routing decisions:
+```python
+class GPUInfo:
+    """GPU information provided by external systems."""
+    id: str
+    name: Optional[str]
+    total_memory_mib: float
+```
+### WorkerConfig
+`WorkerConfig` defines configuration parameters for worker instances, with customizations based on GPU type:
+```python
+class WorkerConfig(TypedDict, total=False):
+    """Configuration for worker instances."""
+    gpu_id: str
+    block_size: int
+    gpu_memory_utilization: float
+```
+## Routing Algorithm
+The router uses a multi-stage decision process:
+1. **GPU Selection**: Filter available GPUs based on hardware compatibility
+2. **Metric Calculation**: Calculate capacity and utilization metrics for each GPU
+3. **Configuration Optimization**: Create optimized worker configurations for each GPU type
+4. **Endpoint Selection**: Select the best endpoint based on the combined metrics
+### GPU Selection Logic
+The router can prefer specific GPU types through the `preferred_gpu_type` parameter:
+```python
+def select_gpu(self, gpu_info: GPUInfo) -> bool:
+    if self.preferred_gpu_type and gpu_info.name:
+        return self.preferred_gpu_type.lower() in gpu_info.name.lower()
+    return True
+```
+### Hardware-Specific Optimizations
+The router applies specialized configurations for different GPU types. For example, NVIDIA T4 GPUs receive custom settings to minimize memory fragmentation:
+```python
+def build_worker_config(self, gpu_info: GPUInfo) -> WorkerConfig:
+    config: WorkerConfig = {"gpu_id": gpu_info.id}
+    # Tune settings for NVIDIA T4 GPUs to curb PagedAttention fragmentation
+    if gpu_info.name and "t4" in gpu_info.name.lower():
+        config["block_size"] = 8
+        config["gpu_memory_utilization"] = 0.85
+    return config
+```
+## Metrics and Caching
+The router uses Prometheus metricsdiff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml
+index 4d48a34..e7ac7ad 100644
+--- a/.github/workflows/ci.yml
++++ b/.github/workflows/ci.yml
+@@ -4,17 +4,37 @@ on:
+     branches: [main]
+   pull_request:
+ jobs:
++  pre-commit:
++    runs-on: ubuntu-latest
++    steps:
++      - uses: actions/checkout@v4
++      - uses: actions/setup-python@v5
++        with: {python-version: "3.11"}
++      - run: python -m pip install --quiet --upgrade pip
++      - run: pip install --quiet poetry
++      - run: poetry install --with dev
++      - name: Validate pre-commit hooks are run
++        run: pre-commit run --all-files --show-diff-on-failure
++      - name: Ensure pre-commit config is properly installed
++        run: |
++          if ! git ls-files --error-unmatch .pre-commit-config.yaml; then
++            echo "Error: .pre-commit-config.yaml file not found or not committed"
++            exit 1
++          fi
++
+   test:
+     runs-on: ubuntu-latest
++    needs: pre-commit
+     steps:
+       - uses: actions/checkout@v4
+       - uses: actions/setup-python@v5
+         with: {python-version: "3.11"}
+       - run: python -m pip install --quiet --upgrade pip
+-      - run: pip install --quiet .[dev] pytest pytest-asyncio ruff mypy
+-      - run: ruff check .
+-      - run: mypy src orchestrator tests --strict --ignore-missing-imports
+-      - run: pytest -q
++      - run: pip install --quiet poetry
++      - run: poetry install --with dev
++      - run: poetry run ruff check . --select=E,F,I,UP,B
++      - run: poetry run mypy src orchestrator tests --strict --ignore-missing-imports
++      - run: poetry run pytest -q
+ 
+   integration-test:
+     runs-on: ubuntu-latest
+@@ -37,3 +57,89 @@ jobs:
+           sleep 5
+           curl -sf http://localhost:8000/health | grep -q '"status":"ok"'
+           kill $PF_PID
++  
++  docs:
++    runs-on: ubuntu-latest
++    needs: test
++    permissions:
++      contents: write
++    steps:
++      - name: Checkout repository
++        uses: actions/checkout@v4
++      
++      - name: Set up Python
++        uses: actions/setup-python@v5
++        with:
++          python-version: "3.11"
++      
++      - name: Install dependencies
++        run: |
++          python -m pip install --quiet --upgrade pip
++          pip install --quiet poetry
++          poetry install --with dev
++      
++      - name: Build documentation
++        run: poetry run mkdocs build
++      
++      - name: Deploy to GitHub Pages
++        if: github.ref == 'refs/heads/main'
++        uses: peaceiris/actions-gh-pages@v3
++        with:
++          github_token: ${{ secrets.GITHUB_TOKEN }}
++          publish_dir: ./site
++          publish_branch: gh-pages
++          full_commit_message: "docs: update documentation site"
++
++  docker:
++    runs-on: ubuntu-latest
++    needs: [test, integration-test]
++    permissions:
++      contents: read
++      packages: write
++      security-events: write
++    steps:
++      - name: Checkout repository
++        uses: actions/checkout@v4
++
++      - name: Set up Docker Buildx
++        uses: docker/setup-buildx-action@v3
++
++      - name: Log in to GitHub Container Registry
++        uses: docker/login-action@v3
++        with:
++          registry: ghcr.io
++          username: ${{ github.actor }}
++          password: ${{ secrets.GITHUB_TOKEN }}
++
++      - name: Build Docker image
++        uses: docker/build-push-action@v5
++        with:
++          context: .
++          push: false
++          load: true
++          tags: ghcr.io/crothmeier/ai-code-assistant:latest
++          cache-from: type=gha
++          cache-to: type=gha,mode=max
++
++      - name: Run Trivy vulnerability scanner
++        uses: aquasecurity/trivy-action@master
++        with:
++          image-ref: ghcr.io/crothmeier/ai-code-assistant:latest
++          format: 'sarif'
++          output: 'trivy-results.sarif'
++          severity: 'CRITICAL,HIGH'
++
++      - name: Upload Trivy scan results to GitHub Security tab
++        uses: github/codeql-action/upload-sarif@v2
++        with:
++          sarif_file: 'trivy-results.sarif'
++
++      - name: Push Docker image
++        uses: docker/build-push-action@v5
++        if: github.ref == 'refs/heads/main'
++        with:
++          context: .
++          push: true
++          tags: ghcr.io/crothmeier/ai-code-assistant:latest
++          cache-from: type=gha
++          cache-to: type=gha,mode=max
+diff --git a/charts/llama-worker/_helpers.tpl b/charts/llama-worker/_helpers.tpl
+index 69098e6..96a2a81 100644
+--- a/charts/llama-worker/_helpers.tpl
++++ b/charts/llama-worker/_helpers.tpl
+@@ -1,3 +1,3 @@
+ {{- define "app.container.name" -}}
+ {{ .Chart.Name }}-{{ .Values.name | default "app" }}-{{ .Release.Name }}
+-{{- end -}}
+\ No newline at end of file
++{{- end -}}
+diff --git a/charts/llama-worker/templates/deployment.yaml b/charts/llama-worker/templates/deployment.yaml
+index 0d409cc..a55c901 100644
+--- a/charts/llama-worker/templates/deployment.yaml
++++ b/charts/llama-worker/templates/deployment.yaml
+@@ -6,4 +6,4 @@ containers:
+       drop: [ALL]        # 'ALL' already removes CAP_SYS_ADMIN
+     readOnlyRootFilesystem: true
+     allowPrivilegeEscalation: false
+-    runAsNonRoot: true
+\ No newline at end of file
++    runAsNonRoot: true
+diff --git a/k8s/netpol-allow-dns.yaml b/k8s/netpol-allow-dns.yaml
+index 097c8b9..95db6bb 100644
+--- a/k8s/netpol-allow-dns.yaml
++++ b/k8s/netpol-allow-dns.yaml
+@@ -14,4 +14,4 @@ spec:
+         podSelector:
+           matchLabels: { k8s-app: kube-dns }
+     ports:
+-      - { protocol: UDP, port: 53 }
+\ No newline at end of file
++      - { protocol: UDP, port: 53 }
+diff --git a/mypy.ini b/mypy.ini
+index 0c1dfd4..f3b264a 100644
+--- a/mypy.ini
++++ b/mypy.ini
+@@ -2,4 +2,4 @@
+ python_version = 3.11
+ strict = True
+ ignore_missing_imports = True
+-show_error_codes = True
+\ No newline at end of file
++show_error_codes = True
+diff --git a/orchestrator/__init__.py b/orchestrator/__init__.py
+index 8e43b15..2a903c7 100644
+--- a/orchestrator/__init__.py
++++ b/orchestrator/__init__.py
+@@ -1 +1 @@
+-"""Marks orchestrator as a Python package so tests can import it."""
+\ No newline at end of file
++"""Marks orchestrator as a Python package so tests can import it."""
+diff --git a/orchestrator/app_breaker.py b/orchestrator/app_breaker.py
+index 2169f0b..a4a0c91 100644
+--- a/orchestrator/app_breaker.py
++++ b/orchestrator/app_breaker.py
+@@ -1 +1 @@
+-# circuit breaker excerpt
+\ No newline at end of file
++# circuit breaker excerpt
+diff --git a/orchestrator/router.py b/orchestrator/router.py
+index 75983a5..582d51b 100644
+--- a/orchestrator/router.py
++++ b/orchestrator/router.py
+@@ -8,4 +8,4 @@ working while ensuring there is only ONE authoritative WeightedRouter class.
+ 
+ from src.router.weighted_router import ModelEndpoint, WeightedRouter  # noqa: F401
+ 
+-__all__ = ["WeightedRouter", "ModelEndpoint"]
+\ No newline at end of file
++__all__ = ["WeightedRouter", "ModelEndpoint"]
+diff --git a/pyproject.toml b/pyproject.toml
+index 04dbb8b..a825380 100644
+--- a/pyproject.toml
++++ b/pyproject.toml
+@@ -1,23 +1,29 @@
+-[project]
++[tool.poetry]
+ name = "ai-code-assistant"
+ version = "0.1.1"
+ description = "FastAPI-based AI code assistant with GPU-aware routing"
+-authors = [{ name = "crothmeier", email = "you@example.com" }]
++authors = ["crothmeier <you@example.com>"]
+ readme = "README.md"
+-requires-python = ">=3.11"
+-dependencies = []
+ 
+-[project.optional-dependencies]
+-dev = [
+-    "pytest",
+-    "pytest-asyncio",
+-    "ruff",
+-    "mypy",
+-]
++[tool.poetry.dependencies]
++python = ">=3.11,<3.12"
++fastapi = "^0.110.0"
++uvicorn = "^0.27.0"
++
++[tool.poetry.group.dev.dependencies]
++pytest = "^8.0.0"
++pytest-asyncio = "^0.23.0"
++ruff = "^0.3.0"
++mypy = "^1.7.0"
++pre-commit = "^3.5.0"
++mkdocs = "^1.5.3"
++mkdocs-material = "^9.5.0"
++mkdocstrings = "^0.24.0"
++mkdocstrings-python = "^1.7.0"
+ 
+ [build-system]
+-requires = ["setuptools>=61.0"]
+-build-backend = "setuptools.build_meta"
++requires = ["poetry-core>=1.0.0"]
++build-backend = "poetry.core.masonry.api"
+ 
+ [tool.ruff]
+ target-version = "py311"
+@@ -25,4 +31,4 @@ line-length = 100
+ fix = true
+ 
+ [tool.ruff.lint]
+-select = ["E", "F", "I", "UP", "B"]
+\ No newline at end of file
++select = ["E", "F", "I", "UP", "B"]
+diff --git a/pytest.ini b/pytest.ini
+index 5334198..1529553 100644
+--- a/pytest.ini
++++ b/pytest.ini
+@@ -1,4 +1,4 @@
+ [pytest]
+ markers =
+     asyncio: mark a test as asyncio-compatible
+-asyncio_default_fixture_loop_scope = function
+\ No newline at end of file
++asyncio_default_fixture_loop_scope = function
+diff --git a/src/router/weighted_router.py b/src/router/weighted_router.py
+index f92268a..3ed2a93 100644
+--- a/src/router/weighted_router.py
++++ b/src/router/weighted_router.py
+@@ -25,9 +25,9 @@ class WorkerConfig(TypedDict, total=False):
+ 
+ class WeightedRouter:
+     def __init__(
+-        self, 
+-        endpoints: Optional[Sequence[ModelEndpoint]] = None, 
+-        prom_url: Optional[str] = None, 
++        self,
++        endpoints: Optional[Sequence[ModelEndpoint]] = None,
++        prom_url: Optional[str] = None,
+         preferred_gpu_type: Optional[str] = None
+     ) -> None:
+         self.endpoints: List[ModelEndpoint] = list(endpoints) if endpoints else []
+@@ -44,7 +44,7 @@ class WeightedRouter:
+         # Correct MiB → GiB conversion
+         gpu_memory_gib = gpu_info.total_memory_mib / 1024
+         return gpu_memory_gib
+-    
++
+     def build_worker_config(self, gpu_info: GPUInfo) -> WorkerConfig:
+         config: WorkerConfig = {"gpu_id": gpu_info.id}
+         # Tune settings for NVIDIA T4 GPUs to curb PagedAttention fragmentation
+@@ -52,9 +52,9 @@ class WeightedRouter:
+             config["block_size"] = 8
+             config["gpu_memory_utilization"] = 0.85
+         return config
+-        
++
+     async def get_best_endpoint(self) -> Optional[ModelEndpoint]:
+         """Returns the best endpoint based on weights."""
+         # In a real implementation, this would use the cache and weights
+         # For now, we just return the first endpoint if available
+-        return self.endpoints[0] if self.endpoints else None
+\ No newline at end of file
++        return self.endpoints[0] if self.endpoints else None
+diff --git a/tests/test_router_gpu_select.py b/tests/test_router_gpu_select.py
+index 6249436..78bab6b 100644
+--- a/tests/test_router_gpu_select.py
++++ b/tests/test_router_gpu_select.py
+@@ -12,4 +12,4 @@ def test_weighted_router_gpu_name_case_insensitive() -> None:
+ 
+     gpu2 = MagicMock(spec=GPUInfo)
+     gpu2.name = "nvidia-a100"
+-    assert router.select_gpu(gpu2)
+\ No newline at end of file
++    assert router.select_gpu(gpu2)
+site_name: AI Code Assistant
+site_description: FastAPI-based AI code assistant with GPU-aware routing
+site_author: crothmeier
+repo_url: https://github.com/crothmeier/ai-code-assistant
+repo_name: crothmeier/ai-code-assistant
+theme:
+  name: material
+  palette:
+    # Palette toggle for light mode
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    # Palette toggle for dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - navigation.expand
+    - navigation.indexes
+    - toc.follow
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - admonition
+  - tables
+  - attr_list
+  - md_in_html
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [src, orchestrator]
+          options:
+            show_source: true
+            show_root_heading: true
+            heading_level: 2
+nav:
+  - Home: index.md
+  - Router Design: router.md
+  - Security: security.md
+  - Architecture: architecture.md
+  - Setup:
+    - GitHub Pages: github-pages-setup.md
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/crothmeier/ai-code-assistant
