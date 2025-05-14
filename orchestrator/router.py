@@ -1,20 +1,11 @@
-"""Router module for the orchestrator."""
+"""Shim module that re-exports the production `WeightedRouter` implementation
+from `src.router.weighted_router`.
 
-class ModelEndpoint:
-    """Represents a model endpoint for routing."""
-    def __init__(self, name, url):
-        self.name = name
-        self.url = url
+This keeps legacy imports like
+    from orchestrator import router as router_mod
+working while ensuring there is only ONE authoritative WeightedRouter class.
+"""
 
-class WeightedRouter:
-    """Routes requests to model endpoints based on weights."""
-    def __init__(self, endpoints, prom_url):
-        self.endpoints = endpoints
-        self.prom_url = prom_url
-        self.cache = {}
-    
-    async def get_best_endpoint(self):
-        """Returns the best endpoint based on weights."""
-        # In a real implementation, this would use the cache and weights
-        # For the test, we just return the first endpoint
-        return self.endpoints[0]
+from src.router.weighted_router import WeightedRouter, ModelEndpoint  # noqa: F401
+
+__all__ = ["WeightedRouter", "ModelEndpoint"]
