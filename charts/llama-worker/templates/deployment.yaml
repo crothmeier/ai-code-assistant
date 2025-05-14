@@ -1,9 +1,9 @@
 containers:
-- name: {{ include "app.container.name" . }}
-  image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
-  securityContext:
-    capabilities:
-      drop: [ALL]        # 'ALL' already removes CAP_SYS_ADMIN
-    readOnlyRootFilesystem: true
-    allowPrivilegeEscalation: false
-    runAsNonRoot: true
+  - name: { { include "app.container.name" . } }
+    image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+    securityContext:
+      capabilities:
+        drop: [ALL] # 'ALL' already removes CAP_SYS_ADMIN
+      readOnlyRootFilesystem: true
+      allowPrivilegeEscalation: false
+      runAsNonRoot: true

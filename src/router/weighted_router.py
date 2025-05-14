@@ -1,5 +1,6 @@
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Union, TypedDict, Sequence
+from typing import TypedDict
 
 
 @dataclass
@@ -12,7 +13,7 @@ class ModelEndpoint:
 class GPUInfo:
     """GPU information provided by external systems."""
     id: str
-    name: Optional[str]
+    name: str | None
     total_memory_mib: float
 
 
@@ -25,15 +26,15 @@ class WorkerConfig(TypedDict, total=False):
 
 class WeightedRouter:
     def __init__(
-        self, 
-        endpoints: Optional[Sequence[ModelEndpoint]] = None, 
-        prom_url: Optional[str] = None, 
-        preferred_gpu_type: Optional[str] = None
+        self,
+        endpoints: Sequence[ModelEndpoint] | None = None,
+        prom_url: str | None = None,
+        preferred_gpu_type: str | None = None
     ) -> None:
-        self.endpoints: List[ModelEndpoint] = list(endpoints) if endpoints else []
+        self.endpoints: list[ModelEndpoint] = list(endpoints) if endpoints else []
         self.prom_url = prom_url
         self.preferred_gpu_type = preferred_gpu_type
-        self.cache: Dict[str, float] = {}
+        self.cache: dict[str, float] = {}
 
     def select_gpu(self, gpu_info: GPUInfo) -> bool:
         if self.preferred_gpu_type and gpu_info.name:
@@ -44,7 +45,7 @@ class WeightedRouter:
         # Correct MiB → GiB conversion
         gpu_memory_gib = gpu_info.total_memory_mib / 1024
         return gpu_memory_gib
-    
+
     def build_worker_config(self, gpu_info: GPUInfo) -> WorkerConfig:
         config: WorkerConfig = {"gpu_id": gpu_info.id}
         # Tune settings for NVIDIA T4 GPUs to curb PagedAttention fragmentation
@@ -52,8 +53,8 @@ class WeightedRouter:
             config["block_size"] = 8
             config["gpu_memory_utilization"] = 0.85
         return config
-        
-    async def get_best_endpoint(self) -> Optional[ModelEndpoint]:
+
+    async def get_best_endpoint(self) -> ModelEndpoint | None:
         """Returns the best endpoint based on weights."""
         # In a real implementation, this would use the cache and weights
         # For now, we just return the first endpoint if available

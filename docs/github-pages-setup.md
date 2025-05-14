@@ -42,6 +42,7 @@ If the automatic deployment isn't working:
 2. **Verify permissions**: Ensure that the GitHub Pages source is set to the gh-pages branch and that workflow permissions allow write access.
 
 3. **Manual deployment**: You can manually deploy the docs with:
+
    ```bash
    poetry run mkdocs gh-deploy
    ```

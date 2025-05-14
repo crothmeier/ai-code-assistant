@@ -1,6 +1,6 @@
 from unittest.mock import MagicMock
 
-from src.router.weighted_router import WeightedRouter, GPUInfo
+from src.router.weighted_router import GPUInfo, WeightedRouter
 
 
 def test_weighted_router_gpu_name_case_insensitive() -> None:

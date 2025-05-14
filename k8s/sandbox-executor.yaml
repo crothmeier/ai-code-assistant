@@ -4,9 +4,9 @@ metadata:
   name: sandbox-executor
 spec:
   selector:
-    matchLabels: {app: sandbox-executor}
+    matchLabels: { app: sandbox-executor }
   template:
-    metadata: {labels: {app: sandbox-executor}}
+    metadata: { labels: { app: sandbox-executor } }
     spec:
       runtimeClassName: gvisor
       securityContext:
@@ -15,20 +15,20 @@ spec:
         fsGroup: 10001
         fsGroupChangePolicy: "OnRootMismatch"
       containers:
-      - name: executor
-        image: ghcr.io/lazarus-labs/sandbox-executor:latest
-        securityContext:
-          allowPrivilegeEscalation: false
-          readOnlyRootFilesystem: true
-          capabilities: {drop: ["ALL"]}
-          seccompProfile: {type: RuntimeDefault}
-        resources:
-          limits: {cpu: "2", memory: "4Gi"}
-        volumeMounts:
-        - name: workspace
-          mountPath: /workspace
+        - name: executor
+          image: ghcr.io/lazarus-labs/sandbox-executor:latest
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: ["ALL"] }
+            seccompProfile: { type: RuntimeDefault }
+          resources:
+            limits: { cpu: "2", memory: "4Gi" }
+          volumeMounts:
+            - name: workspace
+              mountPath: /workspace
       volumes:
-      - name: workspace
-        emptyDir:
-          medium: Memory
-          sizeLimit: 512Mi
+        - name: workspace
+          emptyDir:
+            medium: Memory
+            sizeLimit: 512Mi

@@ -2,7 +2,7 @@ version: "3.9"
 services:
   orchestrator:
     build: ./orchestrator
-    ports: [ "8000:8000" ]
+    ports: ["8000:8000"]
     environment:
       VECTOR_DB_URL: http://vector-db:6333
       MODEL_ENDPOINTS: |

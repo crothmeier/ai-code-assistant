@@ -65,7 +65,8 @@ nav:
   - Security: security.md
   - Architecture: architecture.md
   - Setup:
-    - GitHub Pages: github-pages-setup.md
+      - GitHub Pages: github-pages-setup.md
+      - CI/CD Secrets: ci-secrets.md
 
 extra:
   social:

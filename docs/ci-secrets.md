@@ -14,6 +14,7 @@ For most operations, the workflow uses the automatic `GITHUB_TOKEN` which is pro
 To ensure the workflow can push to the GitHub Container Registry, you need to:
 
 1. **Enable improved container support** in your repository:
+
    - Go to your repository settings
    - Navigate to "Packages"
    - Ensure "Inherit access from source repository" is enabled
@@ -30,12 +31,14 @@ If you encounter issues with pushing to GHCR, you may need to manually create a 
 
 1. Create a new PAT at GitHub → Settings → Developer settings → Personal access tokens
 2. Grant it the following permissions:
+
    - `read:packages`
    - `write:packages`
    - `delete:packages`
    - `repo` (for private repositories)
 
 3. Add the token as a repository secret:
+
    - Repository → Settings → Secrets and variables → Actions
    - Add new repository secret named `CR_PAT`
 
