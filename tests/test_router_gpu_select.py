@@ -1,4 +1,5 @@
 from unittest.mock import MagicMock
+
 from src.router.weighted_router import WeightedRouter
 
 

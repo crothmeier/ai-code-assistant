@@ -1,5 +1,8 @@
-import pytest, asyncio
+
+import pytest
+
 from orchestrator import router as router_mod
+
 
 class DummyEndpoint(router_mod.ModelEndpoint):
     pass

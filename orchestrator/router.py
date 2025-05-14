@@ -6,6 +6,6 @@ This keeps legacy imports like
 working while ensuring there is only ONE authoritative WeightedRouter class.
 """
 
-from src.router.weighted_router import WeightedRouter, ModelEndpoint  # noqa: F401
+from src.router.weighted_router import ModelEndpoint, WeightedRouter  # noqa: F401
 
 __all__ = ["WeightedRouter", "ModelEndpoint"]
