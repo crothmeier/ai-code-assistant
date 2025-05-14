@@ -9,7 +9,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
-        with: {python-version: "3.11"}
+        with: { python-version: "3.11" }
       - run: python -m pip install --quiet --upgrade pip
       - run: pip install --quiet poetry
       - run: poetry install --with dev
@@ -28,7 +28,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
-        with: {python-version: "3.11"}
+        with: { python-version: "3.11" }
       - run: python -m pip install --quiet --upgrade pip
       - run: pip install --quiet poetry
       - run: poetry install --with dev
@@ -117,7 +117,9 @@ jobs:
           context: .
           push: false
           load: true
-          tags: ghcr.io/crothmeier/ai-code-assistant:latest
+          tags: |
+            ghcr.io/crothmeier/ai-code-assistant:latest
+            ghcr.io/crothmeier/ai-code-assistant:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -125,14 +127,14 @@ jobs:
         uses: aquasecurity/trivy-action@master
         with:
           image-ref: ghcr.io/crothmeier/ai-code-assistant:latest
-          format: 'sarif'
-          output: 'trivy-results.sarif'
-          severity: 'CRITICAL,HIGH'
+          format: "sarif"
+          output: "trivy-results.sarif"
+          severity: "CRITICAL,HIGH"
 
       - name: Upload Trivy scan results to GitHub Security tab
         uses: github/codeql-action/upload-sarif@v2
         with:
-          sarif_file: 'trivy-results.sarif'
+          sarif_file: "trivy-results.sarif"
 
       - name: Push Docker image
         uses: docker/build-push-action@v5
@@ -140,6 +142,8 @@ jobs:
         with:
           context: .
           push: true
-          tags: ghcr.io/crothmeier/ai-code-assistant:latest
+          tags: |
+            ghcr.io/crothmeier/ai-code-assistant:latest
+            ghcr.io/crothmeier/ai-code-assistant:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
